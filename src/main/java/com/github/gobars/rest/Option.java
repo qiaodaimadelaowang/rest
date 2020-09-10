@@ -59,7 +59,7 @@ public class Option implements Cloneable {
     return copy;
   }
 
-  public Option request(Object requestBody) {
+  public Option req(Object requestBody) {
     Option copy = this.clone();
     copy.requestBody = requestBody;
     return copy;

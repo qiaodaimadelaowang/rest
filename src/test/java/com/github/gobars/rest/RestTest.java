@@ -10,9 +10,7 @@ import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.util.Map;
 
-/**
- * 使用海草命令，weed server，启动服务端，做测试服务器
- */
+/** 使用海草命令，weed server，启动服务端，做测试服务器 */
 public class RestTest {
   @Test
   public void get() {
@@ -56,5 +54,8 @@ public class RestTest {
 
     Map<String, String> headers = rest.exec(new Option().url(url).method("HEAD"));
     System.out.println(headers);
+
+    String postResult = rest.exec(new Option().url("http://127.0.0.1:8812").req(assign));
+    System.out.println(postResult);
   }
 }
