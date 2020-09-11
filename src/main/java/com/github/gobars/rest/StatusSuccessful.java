@@ -1,6 +1,6 @@
 package com.github.gobars.rest;
 
-public interface StatusCodeSuccessful {
+public interface StatusSuccessful {
   /**
    * 判断http调用状态码是否成功.
    *

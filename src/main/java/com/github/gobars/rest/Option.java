@@ -19,7 +19,7 @@ public class Option implements Cloneable {
   @Getter String fileName;
   // 上传文件输入流
   @Getter InputStream upload;
-  @Getter private StatusCodeSuccessful stateCodeSuccessful = new StatusCodeSuccessful() {};
+  @Getter private StatusSuccessful stateCodeSuccessful = new StatusSuccessful() {};
   @Getter private BizSuccessful bizSuccessful;
 
   @Override
@@ -71,7 +71,7 @@ public class Option implements Cloneable {
     return copy;
   }
 
-  public Option stateCodeSucc(StatusCodeSuccessful stateCodeSuccessful) {
+  public Option stateCodeSucc(StatusSuccessful stateCodeSuccessful) {
     Option copy = this.clone();
     copy.stateCodeSuccessful = stateCodeSuccessful;
     return copy;
