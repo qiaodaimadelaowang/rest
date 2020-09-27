@@ -22,11 +22,11 @@ public class RestTest {
   public static void beforeClass() {
     String binDir = "";
     String os = System.getProperty("os.name", "generic").toLowerCase();
-    if ((os.indexOf("mac") >= 0) || (os.indexOf("darwin") >= 0)) {
+    if (os.contains("mac") || os.contains("darwin")) {
       binDir = "/mac-bin";
       //    } else if (os.indexOf("win") >= 0) {
       // ignore
-    } else if (os.indexOf("nux") >= 0) {
+    } else if (os.contains("nux")) {
       binDir = "/linux-bin";
     }
     if (binDir.isEmpty()) {
