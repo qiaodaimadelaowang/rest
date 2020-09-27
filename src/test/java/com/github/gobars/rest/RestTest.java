@@ -5,14 +5,71 @@ import lombok.Data;
 import lombok.SneakyThrows;
 import lombok.val;
 import org.apache.http.HttpResponse;
+import org.junit.AfterClass;
+import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
+import java.io.*;
 import java.util.Map;
 
 /** 使用海草命令，weed server，启动服务端，做测试服务器 */
 public class RestTest {
+  static Process goRestServerProcess;
+  static Process goWeedProcess;
+
+  @BeforeClass
+  @SneakyThrows
+  public static void beforeClass() {
+    String binDir = "";
+    String os = System.getProperty("os.name", "generic").toLowerCase();
+    if ((os.indexOf("mac") >= 0) || (os.indexOf("darwin") >= 0)) {
+      binDir = "/mac-bin";
+      //    } else if (os.indexOf("win") >= 0) {
+      // ignore
+    } else if (os.indexOf("nux") >= 0) {
+      binDir = "/linux-bin";
+    }
+    if (binDir.isEmpty()) {
+      throw new RuntimeException("Unsupported os " + os);
+    }
+
+    val goRestServer =
+        new ProcessBuilder()
+            .command("src/test/resources" + binDir + "/go-rest-server")
+            .redirectErrorStream(true);
+    val goWeed =
+        new ProcessBuilder()
+            .command("src/test/resources" + binDir + "/weed", "server")
+            .redirectErrorStream(true);
+
+    goRestServerProcess = goRestServer.start();
+    goWeedProcess = goWeed.start();
+
+    new Thread(() -> printOut(goRestServerProcess)).start();
+    new Thread(() -> printOut(goWeedProcess)).start();
+
+    Thread.sleep(6000L);
+  }
+
+  @AfterClass
+  public static void afterClass() {
+    goRestServerProcess.destroy();
+    goWeedProcess.destroy();
+  }
+
+  @SneakyThrows
+  public static void printOut(Process p) {
+    BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
+
+    try {
+      String line;
+      while ((line = reader.readLine()) != null) {
+        System.out.println(line);
+      }
+    } catch (IOException ignore) {
+    }
+  }
+
   @Test
   public void get() {
     String status = new Rest().exec(new Option().url("http://127.0.0.1:8080/status"));
@@ -48,7 +105,9 @@ public class RestTest {
         rest.exec(new Option().url(url).upload("biniki.png", upload).clazz(UploadResult.class));
     System.out.println(uploadResult);
 
-    @Cleanup val fo = new FileOutputStream(assign.getFid() + ".png");
+    new File("temp/").mkdirs();
+    @Cleanup val fo = new FileOutputStream("temp/" + assign.getFid() + ".png");
+
 
     String downloadRest = rest.exec(new Option().url(url).download(fo));
     System.out.println(downloadRest);
@@ -77,10 +136,12 @@ public class RestTest {
     res.setMessage("OK");
     res.setData(assign);
 
-    Res<DirAssign> res2 = rest.exec(req.method("POST")
-            .url("http://127.0.0.1:8812/echo")
-            .req(res)
-            .type(new PTypeRef<Res<DirAssign>>(){}.getType()));
+    Res<DirAssign> res2 =
+        rest.exec(
+            req.method("POST")
+                .url("http://127.0.0.1:8812/echo")
+                .req(res)
+                .type(new TypeRef<Res<DirAssign>>() {}.getType()));
 
     System.out.println(res2);
   }

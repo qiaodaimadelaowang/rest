@@ -29,8 +29,8 @@ import java.util.Map;
 @Slf4j
 @Component
 public class Rest {
-  public static HttpClient client = HttpClientBuilder.create().build();
-  private RequestConfig requestConfig =
+  public static final HttpClient CLIENT = HttpClientBuilder.create().build();
+  private final RequestConfig requestConfig =
       RequestConfig.custom()
           // 从连接池获取到连接的超时时间，如果是非连接池的话，该参数暂时没有发现有什么用处
           .setConnectionRequestTimeout(30 * 1000)
@@ -75,7 +75,7 @@ public class Rest {
     jsonBody(option, req, result);
     uploadBody(option, req);
 
-    HttpResponse response = client.execute(req);
+    HttpResponse response = CLIENT.execute(req);
 
     int code = codeCheck(option, req, response);
 
@@ -92,8 +92,8 @@ public class Rest {
     result.setStatusCode(code);
 
     T t = (T) parseT(option, method, body, response, result);
-    BizSuccessful<T> succ = option.getBizSuccessful();
-    if (succ != null && !succ.isSuccessful(code, body, t)) {
+    OkBiz<T> succ = option.getOkBiz();
+    if (succ != null && !succ.isOk(code, body, t)) {
       throw new HttpRestException(uri, code, response, succ + "业务判断不成功");
     }
 
@@ -121,8 +121,8 @@ public class Rest {
 
   private int codeCheck(Option option, HttpRequestBase req, HttpResponse response) {
     int code = response.getStatusLine().getStatusCode();
-    StatusSuccessful codeSucc = option.getStateCodeSuccessful();
-    if (!codeSucc.isSuccessful(code)) {
+    OkStatus okStatus = option.getOkStatus();
+    if (!okStatus.isOk(code)) {
       throw new HttpRestException(option.getUrl(), code, response);
     }
 
@@ -182,7 +182,7 @@ public class Rest {
   public static class HttpRestException extends RuntimeException {
     String uri;
     int code;
-    HttpResponse response;
+    transient HttpResponse response;
 
     public HttpRestException(String uri, int code, HttpResponse response) {
       this(uri, code, response, "");

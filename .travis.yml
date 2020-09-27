@@ -1,22 +1,5 @@
 dist: xenial
 
-services:
-  - docker
-before_install:
-  - docker pull mysql:5.7.29
-  - docker run --name mysql -d -p 3306:3306 -e MYSQL_ROOT_PASSWORD=root -v ${PWD}:/data mysql:5.7.29
-  - docker pull epiclabs/docker-oracle-xe-11g
-  - docker run --name oracle -d -p 127.0.0.1:1521:1521 -e ORACLE_ALLOW_REMOTE=true -v ${PWD}:/data epiclabs/docker-oracle-xe-11g
-  # - docker inspect oracle
-  # - docker ps -a
-  - echo "Wait to allow Oracle to be initialized"
-  - travis_wait sleep 10
-  - docker top oracle
-  - docker exec -it mysql mysqladmin ping -uroot -proot --wait=30 --silent
-  - docker exec -it mysql /bin/bash /data/scripts/waitmysql.sh
-  - docker exec -it mysql /bin/bash -c "mysql -u root -proot -s < /data/scripts/mysql-ddl.sql"
-  - docker exec -it oracle /bin/bash /data/scripts/wait-for-oracle.sh
-
 language: java
 install: mvn install -DskipTests -Dgpg.skip
 jdk: openjdk8
