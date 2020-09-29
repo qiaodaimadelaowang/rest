@@ -47,6 +47,10 @@ public class Option implements Cloneable {
     return copy;
   }
 
+  public <T> Option type(TypeRef<T> ref) {
+    return type(ref.getType());
+  }
+
   public Option type(Type type) {
     Option copy = this.clone();
     copy.type = type;

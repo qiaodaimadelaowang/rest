@@ -141,7 +141,7 @@ public class RestTest {
             req.method("POST")
                 .url("http://127.0.0.1:8812/echo")
                 .req(res)
-                .type(new TypeRef<Res<DirAssign>>() {}.getType()));
+                .type(new TypeRef<Res<DirAssign>>() {}));
 
     System.out.println(res2);
   }
