@@ -64,35 +64,47 @@ public class Rest {
     }
   }
 
+  public <T> T exec(RestOption restOption) {
+    return exec(restOption, new Runtime());
+  }
+
   @SneakyThrows
   @SuppressWarnings("unchecked")
-  public <T> T exec(Option option) {
-    String method = fixMethod(option);
-    HttpRequestBase req = buildRequest(method, option.getUrl());
-    req.setConfig(requestConfig);
-    Result result = new Result();
+  public <T> T exec(RestOption restOption, Runtime rt) {
+    String method = fixMethod(restOption);
+    String url = restOption.getUrl();
+    rt.setUrl(url);
 
-    jsonBody(option, req, result);
-    uploadBody(option, req);
+    HttpRequestBase req = buildRequest(method, url);
+    req.setConfig(requestConfig);
+
+    jsonBody(restOption, req, rt);
+    uploadBody(restOption, req);
+
+    for (val headers : restOption.getMoreHeaders().entrySet()) {
+      for (val value : headers.getValue()) {
+        req.addHeader(headers.getKey(), value);
+      }
+    }
 
     HttpResponse response = CLIENT.execute(req);
 
-    int code = codeCheck(option, req, response);
+    int code = codeCheck(restOption, req, response);
 
     HttpEntity responseEntity = response.getEntity();
-    if (option.getDownload() != null) {
-      responseEntity.writeTo(option.getDownload());
+    if (restOption.getDownload() != null) {
+      responseEntity.writeTo(restOption.getDownload());
       return null;
     }
 
     String body = responseEntity != null ? EntityUtils.toString(responseEntity) : null;
     String uri = req.getURI().toString();
-    result.setResponse(response);
-    result.setResultBody(body);
-    result.setStatusCode(code);
+    rt.setResponse(response);
+    rt.setResultBody(body);
+    rt.setStatusCode(code);
 
-    T t = (T) parseT(option, method, body, response, result);
-    OkBiz<T> succ = option.getOkBiz();
+    T t = (T) parseT(restOption, method, body, response, rt);
+    OkBiz<T> succ = restOption.getOkBiz();
     if (succ != null && !succ.isOk(code, body, t)) {
       throw new HttpRestException(uri, code, response, succ + "业务判断不成功");
     }
@@ -100,12 +112,16 @@ public class Rest {
     return t;
   }
 
-  private String fixMethod(Option option) {
-    if (option.getRequestBody() != null || option.getUpload() != null) {
+  private String fixMethod(RestOption restOption) {
+    if (restOption.getMethod() != null) {
+      return restOption.getMethod();
+    }
+
+    if (restOption.getRequestBody() != null || restOption.getUpload() != null) {
       return "POST";
     }
 
-    return option.getMethod();
+    return "GET";
   }
 
   @NotNull
@@ -119,55 +135,55 @@ public class Rest {
     return headers;
   }
 
-  private int codeCheck(Option option, HttpRequestBase req, HttpResponse response) {
+  private int codeCheck(RestOption restOption, HttpRequestBase req, HttpResponse response) {
     int code = response.getStatusLine().getStatusCode();
-    OkStatus okStatus = option.getOkStatus();
+    OkStatus okStatus = restOption.getOkStatus();
     if (!okStatus.isOk(code)) {
-      throw new HttpRestException(option.getUrl(), code, response);
+      throw new HttpRestException(restOption.getUrl(), code, response);
     }
 
-    log.info("{} {}, code:{}", req.getMethod(), option.getUrl(), code);
+    log.info("{} {}, code:{}", req.getMethod(), restOption.getUrl(), code);
     return code;
   }
 
-  private void uploadBody(Option option, HttpRequestBase req) {
-    if (option.getUpload() != null) {
+  private void uploadBody(RestOption restOption, HttpRequestBase req) {
+    if (restOption.getUpload() != null) {
       val builder = MultipartEntityBuilder.create();
       builder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
-      String fn = option.getFileName();
-      builder.addBinaryBody(fn, option.getUpload(), ContentType.DEFAULT_BINARY, fn);
+      String fn = restOption.getFileName();
+      builder.addBinaryBody(fn, restOption.getUpload(), ContentType.DEFAULT_BINARY, fn);
       val entityReq = (HttpEntityEnclosingRequest) req;
       entityReq.setEntity(builder.build());
     }
   }
 
-  private void jsonBody(Option option, HttpRequestBase req, Result result) {
-    if (option.getRequestBody() != null && req instanceof HttpEntityEnclosingRequest) {
-      String payload = JSON.toJSONString(option.getRequestBody());
-      result.setPayload(payload);
+  private void jsonBody(RestOption restOption, HttpRequestBase req, Runtime rt) {
+    if (restOption.getRequestBody() != null && req instanceof HttpEntityEnclosingRequest) {
+      String payload = JSON.toJSONString(restOption.getRequestBody());
+      rt.setPayload(payload);
       val entityReq = (HttpEntityEnclosingRequest) req;
       entityReq.setEntity(new StringEntity(payload, ContentType.APPLICATION_JSON));
     }
   }
 
   private Object parseT(
-      Option option, String method, String body, HttpResponse response, Result result) {
+      RestOption restOption, String method, String body, HttpResponse response, Runtime rt) {
     if ("HEAD".equals(method)) {
       return copyHeaders(response);
     }
 
-    Type type = option.getType();
+    Type type = restOption.getType();
     if (type != null) {
       return JSON.parseObject(body, type);
     }
 
-    Class<?> clazz = option.getClazz();
+    Class<?> clazz = restOption.getClazz();
     if (clazz == HttpResponse.class) {
       return response;
     }
 
-    if (clazz == Result.class) {
-      return result;
+    if (clazz == Runtime.class) {
+      return rt;
     }
 
     if (clazz != null) {

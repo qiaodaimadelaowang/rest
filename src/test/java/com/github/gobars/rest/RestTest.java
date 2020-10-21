@@ -72,7 +72,7 @@ public class RestTest {
 
   @Test
   public void get() {
-    String status = new Rest().exec(new Option().url("http://127.0.0.1:8080/status"));
+    String status = new Rest().exec(new RestOption().url("http://127.0.0.1:8080/status"));
     System.out.println(status);
   }
 
@@ -96,26 +96,25 @@ public class RestTest {
   public void upload() {
     Rest rest = new Rest();
     String assignUrl = "http://127.0.0.1:9333/dir/assign";
-    DirAssign assign = rest.exec(new Option().url(assignUrl).clazz(DirAssign.class));
+    DirAssign assign = rest.exec(new RestOption().url(assignUrl).clazz(DirAssign.class));
     System.out.println(assign);
 
     @Cleanup val upload = new FileInputStream("src/test/resources/bikini.png");
     String url = "http://" + assign.getPublicUrl() + "/" + assign.getFid();
     UploadResult uploadResult =
-        rest.exec(new Option().url(url).upload("biniki.png", upload).clazz(UploadResult.class));
+        rest.exec(new RestOption().url(url).upload("biniki.png", upload).clazz(UploadResult.class));
     System.out.println(uploadResult);
 
     new File("temp/").mkdirs();
     @Cleanup val fo = new FileOutputStream("temp/" + assign.getFid() + ".png");
 
-
-    String downloadRest = rest.exec(new Option().url(url).download(fo));
+    String downloadRest = rest.exec(new RestOption().url(url).download(fo));
     System.out.println(downloadRest);
 
-    Map<String, String> headers = rest.exec(new Option().url(url).method("HEAD"));
+    Map<String, String> headers = rest.exec(new RestOption().url(url).method("HEAD"));
     System.out.println(headers);
 
-    Option req = new Option().url("http://127.0.0.1:8812").req(assign);
+    RestOption req = new RestOption().url("http://127.0.0.1:8812").req(assign);
     String postResult = rest.exec(req);
     System.out.println(postResult);
 
@@ -127,8 +126,8 @@ public class RestTest {
         rest.exec(req.method("POST").url("http://127.0.0.1:8812/echo").clazz(HttpResponse.class));
     System.out.println(rsp);
 
-    Result result =
-        rest.exec(req.method("POST").url("http://127.0.0.1:8812/echo").clazz(Result.class));
+    Runtime result =
+        rest.exec(req.method("POST").url("http://127.0.0.1:8812/echo").clazz(Runtime.class));
     System.out.println(result);
 
     Res<DirAssign> res = new Res<>();

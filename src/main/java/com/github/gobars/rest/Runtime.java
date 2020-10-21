@@ -4,9 +4,15 @@ import lombok.Data;
 import org.apache.http.HttpResponse;
 
 @Data
-public class Result {
+public class Runtime {
+  /** 请求地址 */
+  private String url;
+  /** 请求体。 */
   private String payload;
+  /** 响应体。 */
   private String resultBody;
+  /** 响应状态码。 */
   private int statusCode;
+  /** 原始响应。 */
   private HttpResponse response;
 }
