@@ -16,9 +16,9 @@ public interface OkBiz<T> {
    * <p>2. 直接抛出自定义的异常
    *
    * @param stateCode 返回的HTTP状态码
-   * @param resultPayload 返回体
+   * @param rt RestRuntime
    * @param resultBean 反序列化后的Bean
    * @return 是否成功
    */
-  boolean isOk(int stateCode, String resultPayload, T resultBean);
+  boolean isOk(int stateCode, RestRuntime rt, T resultBean);
 }

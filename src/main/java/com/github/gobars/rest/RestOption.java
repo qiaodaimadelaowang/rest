@@ -24,6 +24,8 @@ public class RestOption implements Cloneable {
   @Getter private OkStatus okStatus = new OkStatus() {};
   @Getter private OkBiz okBiz;
   @Getter private HttpHeaders moreHeaders = new HttpHeaders();
+  @Getter private DoneBiz doneBiz = (success, rt) -> {};
+  @Getter private boolean dump = true;
 
   @Override
   @SneakyThrows
@@ -102,9 +104,21 @@ public class RestOption implements Cloneable {
     return copy;
   }
 
+  public RestOption doneBiz(DoneBiz doneBiz) {
+    RestOption copy = this.clone();
+    copy.doneBiz = doneBiz;
+    return copy;
+  }
+
   public RestOption okBiz(OkBiz okBiz) {
     RestOption copy = this.clone();
     copy.okBiz = okBiz;
+    return copy;
+  }
+
+  public RestOption dump(boolean dump) {
+    RestOption copy = this.clone();
+    copy.dump = dump;
     return copy;
   }
 

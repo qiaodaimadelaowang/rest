@@ -126,8 +126,8 @@ public class RestTest {
         rest.exec(req.method("POST").url("http://127.0.0.1:8812/echo").clazz(HttpResponse.class));
     System.out.println(rsp);
 
-    Runtime result =
-        rest.exec(req.method("POST").url("http://127.0.0.1:8812/echo").clazz(Runtime.class));
+    RestRuntime result =
+        rest.exec(req.method("POST").url("http://127.0.0.1:8812/echo").clazz(RestRuntime.class));
     System.out.println(result);
 
     Res<DirAssign> res = new Res<>();

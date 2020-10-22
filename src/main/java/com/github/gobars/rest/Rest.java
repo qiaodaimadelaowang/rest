@@ -18,6 +18,7 @@ import org.apache.http.entity.StringEntity;
 import org.apache.http.entity.mime.HttpMultipartMode;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.impl.client.HttpClientBuilder;
+import org.apache.http.protocol.BasicHttpContext;
 import org.apache.http.util.EntityUtils;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Component;
@@ -29,7 +30,12 @@ import java.util.Map;
 @Slf4j
 @Component
 public class Rest {
-  public static final HttpClient CLIENT = HttpClientBuilder.create().build();
+  public static final HttpClient CLIENT =
+      HttpClientBuilder.create()
+          .addInterceptorFirst(new Interceptor.Rsp())
+          .addInterceptorFirst(new Interceptor.Req())
+          .build();
+
   private final RequestConfig requestConfig =
       RequestConfig.custom()
           // 从连接池获取到连接的超时时间，如果是非连接池的话，该参数暂时没有发现有什么用处
@@ -65,15 +71,28 @@ public class Rest {
   }
 
   public <T> T exec(RestOption restOption) {
-    return exec(restOption, new Runtime());
+    return exec(restOption, new RestRuntime());
+  }
+
+  public <T> T exec(RestOption restOption, RestRuntime rt) {
+    try {
+      return execInternal(restOption, rt);
+    } finally {
+      restOption.getDoneBiz().done(rt.getException() == null, rt);
+    }
   }
 
   @SneakyThrows
   @SuppressWarnings("unchecked")
-  public <T> T exec(RestOption restOption, Runtime rt) {
+  public <T> T execInternal(RestOption restOption, RestRuntime rt) {
     String method = fixMethod(restOption);
     String url = restOption.getUrl();
+    rt.setMethod(method);
     rt.setUrl(url);
+
+    if (restOption.isDump()) {
+      log.info("请求方法:{} 请求地址:{}", method, url);
+    }
 
     HttpRequestBase req = buildRequest(method, url);
     req.setConfig(requestConfig);
@@ -87,29 +106,59 @@ public class Rest {
       }
     }
 
-    HttpResponse response = CLIENT.execute(req);
+    HttpResponse response;
+    val ctx = new BasicHttpContext();
+    ctx.setAttribute(Interceptor.REST_OPTION_KEY, restOption);
+    long start = System.currentTimeMillis();
 
-    int code = codeCheck(restOption, req, response);
+    try {
+      response = CLIENT.execute(req, ctx);
+    } catch (Exception ex) {
+      rt.setException(ex);
+      log.warn("异常:{}", ex.getMessage());
 
-    HttpEntity responseEntity = response.getEntity();
-    if (restOption.getDownload() != null) {
-      responseEntity.writeTo(restOption.getDownload());
-      return null;
+      throw ex;
+    } finally {
+      rt.setHttpCostMillis(System.currentTimeMillis() - start);
     }
 
-    String body = responseEntity != null ? EntityUtils.toString(responseEntity) : null;
-    String uri = req.getURI().toString();
-    rt.setResponse(response);
-    rt.setResultBody(body);
-    rt.setStatusCode(code);
-
-    T t = (T) parseT(restOption, method, body, response, rt);
-    OkBiz<T> succ = restOption.getOkBiz();
-    if (succ != null && !succ.isOk(code, body, t)) {
-      throw new HttpRestException(uri, code, response, succ + "业务判断不成功");
+    if (restOption.isDump()) {
+      log.info(
+          "请求方法:{} 请求地址:{} 响应状态码:{} 费时:{}毫秒",
+          rt.getMethod(),
+          restOption.getUrl(),
+          response.getStatusLine().getStatusCode(),
+          rt.getHttpCostMillis());
     }
 
-    return t;
+    try {
+      int code = codeCheck(restOption, response);
+      HttpEntity responseEntity = response.getEntity();
+      if (restOption.getDownload() != null) {
+        responseEntity.writeTo(restOption.getDownload());
+        return null;
+      }
+
+      String body = responseEntity != null ? EntityUtils.toString(responseEntity) : null;
+      rt.setResponse(response);
+      rt.setResultBody(body);
+      rt.setStatusCode(code);
+
+      if (restOption.isDump()) {
+        log.info("响应体:{}", body);
+      }
+
+      T t = (T) parseT(restOption, method, body, response, rt);
+      OkBiz<T> succ = restOption.getOkBiz();
+      if (succ != null && !succ.isOk(code, rt, t)) {
+        throw new HttpRestException(rt.getUrl(), code, response, succ + "业务判断不成功");
+      }
+
+      return t;
+    } catch (Exception ex) {
+      rt.setException(ex);
+      throw ex;
+    }
   }
 
   private String fixMethod(RestOption restOption) {
@@ -135,14 +184,13 @@ public class Rest {
     return headers;
   }
 
-  private int codeCheck(RestOption restOption, HttpRequestBase req, HttpResponse response) {
+  private int codeCheck(RestOption restOption, HttpResponse response) {
     int code = response.getStatusLine().getStatusCode();
     OkStatus okStatus = restOption.getOkStatus();
     if (!okStatus.isOk(code)) {
       throw new HttpRestException(restOption.getUrl(), code, response);
     }
 
-    log.info("{} {}, code:{}", req.getMethod(), restOption.getUrl(), code);
     return code;
   }
 
@@ -157,9 +205,12 @@ public class Rest {
     }
   }
 
-  private void jsonBody(RestOption restOption, HttpRequestBase req, Runtime rt) {
+  private void jsonBody(RestOption restOption, HttpRequestBase req, RestRuntime rt) {
     if (restOption.getRequestBody() != null && req instanceof HttpEntityEnclosingRequest) {
       String payload = JSON.toJSONString(restOption.getRequestBody());
+      if (restOption.isDump()) {
+        log.info("请求体:{}", payload);
+      }
       rt.setPayload(payload);
       val entityReq = (HttpEntityEnclosingRequest) req;
       entityReq.setEntity(new StringEntity(payload, ContentType.APPLICATION_JSON));
@@ -167,7 +218,7 @@ public class Rest {
   }
 
   private Object parseT(
-      RestOption restOption, String method, String body, HttpResponse response, Runtime rt) {
+      RestOption restOption, String method, String body, HttpResponse response, RestRuntime rt) {
     if ("HEAD".equals(method)) {
       return copyHeaders(response);
     }
@@ -182,7 +233,7 @@ public class Rest {
       return response;
     }
 
-    if (clazz == Runtime.class) {
+    if (clazz == RestRuntime.class) {
       return rt;
     }
 

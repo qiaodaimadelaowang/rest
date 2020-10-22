@@ -4,7 +4,9 @@ import lombok.Data;
 import org.apache.http.HttpResponse;
 
 @Data
-public class Runtime {
+public class RestRuntime {
+  /** 请求方法 */
+  private String method;
   /** 请求地址 */
   private String url;
   /** 请求体。 */
@@ -15,4 +17,9 @@ public class Runtime {
   private int statusCode;
   /** 原始响应。 */
   private HttpResponse response;
+
+  /** HTTP调用耗时毫秒 */
+  private long httpCostMillis;
+  /** HTTP调用异常 */
+  private Exception exception;
 }
