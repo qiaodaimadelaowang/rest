@@ -7,6 +7,7 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Type;
 import java.net.URI;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -126,6 +127,11 @@ public class RestOption implements Cloneable {
 
   public RestOption headers(Map<String, List<String>> moreHeaders) {
     RestOption copy = this.clone();
+
+    copy.moreHeaders = new LinkedHashMap<>();
+    if (moreHeaders != null) {
+      copy.moreHeaders.putAll(moreHeaders);
+    }
 
     for (Map.Entry<String, List<String>> entry : moreHeaders.entrySet()) {
       String key = entry.getKey();
