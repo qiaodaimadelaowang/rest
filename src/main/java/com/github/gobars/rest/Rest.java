@@ -18,15 +18,13 @@ import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.protocol.BasicHttpContext;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
-import org.jetbrains.annotations.NotNull;
-import org.springframework.stereotype.Component;
 
 import java.lang.reflect.Type;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Slf4j
-@Component
 public class Rest {
   public static final HttpClient CLIENT =
       HttpClientBuilder.create()
@@ -46,6 +44,22 @@ public class Rest {
           .setConnectTimeout(30 * 1000)
           .build();
 
+  public <T> T exec(RestOption restOption) {
+    return exec(restOption, new RestRuntime());
+  }
+
+  public <T> T exec(RestOption restOption, RestRuntime rt) {
+    try {
+      return execInternal(restOption, rt);
+    } catch (Exception ex) {
+      rt.setException(ex);
+      log.warn("异常:{}", ex.getMessage());
+      throw ex;
+    } finally {
+      restOption.getDoneBiz().done(rt.getException() == null, rt);
+    }
+  }
+
   private HttpRequestBase buildRequest(String method, String url) {
     switch (method.toUpperCase()) {
       case "POST":
@@ -61,22 +75,6 @@ public class Rest {
       case "GET":
       default:
         return new HttpGet(url);
-    }
-  }
-
-  public <T> T exec(RestOption restOption) {
-    return exec(restOption, new RestRuntime());
-  }
-
-  public <T> T exec(RestOption restOption, RestRuntime rt) {
-    try {
-      return execInternal(restOption, rt);
-    } catch (Exception ex) {
-      rt.setException(ex);
-      log.warn("异常:{}", ex.getMessage());
-      throw ex;
-    } finally {
-      restOption.getDoneBiz().done(rt.getException() == null, rt);
     }
   }
 
@@ -142,7 +140,13 @@ public class Rest {
   }
 
   private void copyHeaders(RestOption ro, HttpRequestBase req) {
-    for (val headers : ro.getMoreHeaders().entrySet()) {
+    Map<String, List<String>> moreHeaders = ro.getMoreHeaders();
+
+    if (moreHeaders == null) {
+      return;
+    }
+
+    for (val headers : moreHeaders.entrySet()) {
       for (val value : headers.getValue()) {
         req.addHeader(headers.getKey(), value);
       }
@@ -161,7 +165,6 @@ public class Rest {
     return "GET";
   }
 
-  @NotNull
   private Map<String, String> copyHeaders(HttpResponse rsp) {
     Header[] allHeaders = rsp.getAllHeaders();
     Map<String, String> headers = new HashMap<>(allHeaders.length);
@@ -182,9 +185,18 @@ public class Rest {
   }
 
   private void jsonBody(RestOption ro, HttpRequestBase req, RestRuntime rt) {
-    Object body = ro.getRequestBody();
-    if (body != null && req instanceof HttpEntityEnclosingRequest) {
-      String payload = JSON.toJSONString(body);
+    if (ro.getUpload() != null) {
+      val builder = MultipartEntityBuilder.create();
+      builder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
+      String fn = ro.getFileName();
+      builder.addBinaryBody(fn, ro.getUpload(), ContentType.DEFAULT_BINARY, fn);
+      val er = (HttpEntityEnclosingRequest) req;
+      er.setEntity(builder.build());
+      return;
+    }
+
+    if (ro.getRequestBody() != null && req instanceof HttpEntityEnclosingRequest) {
+      String payload = JSON.toJSONString(ro.getRequestBody());
       if (ro.isDump()) {
         log.info("请求体:{}", payload);
       }
@@ -192,13 +204,6 @@ public class Rest {
       rt.setPayload(payload);
       val er = (HttpEntityEnclosingRequest) req;
       er.setEntity(new StringEntity(payload, ContentType.APPLICATION_JSON));
-    } else if (ro.getUpload() != null) {
-      val builder = MultipartEntityBuilder.create();
-      builder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
-      String fn = ro.getFileName();
-      builder.addBinaryBody(fn, ro.getUpload(), ContentType.DEFAULT_BINARY, fn);
-      val er = (HttpEntityEnclosingRequest) req;
-      er.setEntity(builder.build());
     }
   }
 

@@ -2,12 +2,14 @@ package com.github.gobars.rest;
 
 import lombok.Getter;
 import lombok.SneakyThrows;
-import org.springframework.http.HttpHeaders;
 
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.lang.reflect.Type;
 import java.net.URI;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 
 public class RestOption implements Cloneable {
   @Getter private String method;
@@ -23,7 +25,7 @@ public class RestOption implements Cloneable {
   @Getter InputStream upload;
   @Getter private OkStatus okStatus = new OkStatus() {};
   @Getter private OkBiz okBiz = new OkBiz() {};
-  @Getter private HttpHeaders moreHeaders = new HttpHeaders();
+  @Getter private Map<String, List<String>> moreHeaders;
   @Getter private DoneBiz doneBiz = (success, rt) -> {};
   @Getter private boolean dump = true;
 
@@ -122,9 +124,15 @@ public class RestOption implements Cloneable {
     return copy;
   }
 
-  public RestOption headers(HttpHeaders moreHeaders) {
+  public RestOption headers(Map<String, List<String>> moreHeaders) {
     RestOption copy = this.clone();
-    copy.moreHeaders.addAll(moreHeaders);
+
+    for (Map.Entry<String, List<String>> entry : moreHeaders.entrySet()) {
+      String key = entry.getKey();
+      List<String> currentValues = copy.moreHeaders.computeIfAbsent(key, k -> new LinkedList<>());
+      currentValues.addAll(entry.getValue());
+    }
+
     return copy;
   }
 }
