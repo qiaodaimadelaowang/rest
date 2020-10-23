@@ -6,10 +6,7 @@ import lombok.SneakyThrows;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
-import org.apache.http.Header;
-import org.apache.http.HttpEntity;
-import org.apache.http.HttpEntityEnclosingRequest;
-import org.apache.http.HttpResponse;
+import org.apache.http.*;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.*;
@@ -19,6 +16,7 @@ import org.apache.http.entity.mime.HttpMultipartMode;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.protocol.BasicHttpContext;
+import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
 import org.jetbrains.annotations.NotNull;
 import org.springframework.stereotype.Component;
@@ -32,8 +30,8 @@ import java.util.Map;
 public class Rest {
   public static final HttpClient CLIENT =
       HttpClientBuilder.create()
-          .addInterceptorFirst(new Interceptor.Rsp())
-          .addInterceptorFirst(new Interceptor.Req())
+          .addInterceptorFirst(new Rsp())
+          .addInterceptorFirst(new Req())
           .build();
 
   private final RequestConfig requestConfig =
@@ -48,11 +46,7 @@ public class Rest {
           .setConnectTimeout(30 * 1000)
           .build();
 
-  public HttpRequestBase buildRequest(String method, String url) {
-    if (method == null) {
-      method = "GET";
-    }
-
+  private HttpRequestBase buildRequest(String method, String url) {
     switch (method.toUpperCase()) {
       case "POST":
         return new HttpPost(url);
@@ -77,6 +71,10 @@ public class Rest {
   public <T> T exec(RestOption restOption, RestRuntime rt) {
     try {
       return execInternal(restOption, rt);
+    } catch (Exception ex) {
+      rt.setException(ex);
+      log.warn("异常:{}", ex.getMessage());
+      throw ex;
     } finally {
       restOption.getDoneBiz().done(rt.getException() == null, rt);
     }
@@ -84,89 +82,79 @@ public class Rest {
 
   @SneakyThrows
   @SuppressWarnings("unchecked")
-  public <T> T execInternal(RestOption restOption, RestRuntime rt) {
-    String method = fixMethod(restOption);
-    String url = restOption.getUrl();
-    rt.setMethod(method);
-    rt.setUrl(url);
+  private <T> T execInternal(RestOption ro, RestRuntime rt) {
+    rt.setMethod(fixMethod(ro));
+    rt.setUrl(ro.getUrl());
 
-    if (restOption.isDump()) {
-      log.info("请求方法:{} 请求地址:{}", method, url);
+    if (ro.isDump()) {
+      log.info("请求方法:{} 请求地址:{}", rt.getMethod(), rt.getUrl());
     }
 
-    HttpRequestBase req = buildRequest(method, url);
+    HttpRequestBase req = buildRequest(rt.getMethod(), rt.getUrl());
     req.setConfig(requestConfig);
+    jsonBody(ro, req, rt);
+    copyHeaders(ro, req);
 
-    jsonBody(restOption, req, rt);
-    uploadBody(restOption, req);
-
-    for (val headers : restOption.getMoreHeaders().entrySet()) {
-      for (val value : headers.getValue()) {
-        req.addHeader(headers.getKey(), value);
-      }
-    }
-
-    HttpResponse response;
+    HttpResponse rsp;
     val ctx = new BasicHttpContext();
-    ctx.setAttribute(Interceptor.REST_OPTION_KEY, restOption);
+    ctx.setAttribute(REST_OPTION_KEY, ro);
     long start = System.currentTimeMillis();
 
     try {
-      response = CLIENT.execute(req, ctx);
-    } catch (Exception ex) {
-      rt.setException(ex);
-      log.warn("异常:{}", ex.getMessage());
-
-      throw ex;
+      rsp = CLIENT.execute(req, ctx);
+      rt.setResponse(rsp);
     } finally {
       rt.setHttpCostMillis(System.currentTimeMillis() - start);
     }
 
-    if (restOption.isDump()) {
+    if (ro.isDump()) {
       log.info(
-          "请求方法:{} 请求地址:{} 响应状态码:{} 费时:{}毫秒",
+          "请求方法:{} 请求地址:{} 响应码:{} 费时:{}毫秒",
           rt.getMethod(),
-          restOption.getUrl(),
-          response.getStatusLine().getStatusCode(),
+          ro.getUrl(),
+          rsp.getStatusLine().getStatusCode(),
           rt.getHttpCostMillis());
     }
 
-    try {
-      int code = codeCheck(restOption, response);
-      HttpEntity responseEntity = response.getEntity();
-      if (restOption.getDownload() != null) {
-        responseEntity.writeTo(restOption.getDownload());
+    codeCheck(ro, rsp, rt);
+
+    HttpEntity rspEntity = rsp.getEntity();
+    if (rspEntity != null) {
+      if (ro.getDownload() != null) {
+        rspEntity.writeTo(ro.getDownload());
         return null;
       }
 
-      String body = responseEntity != null ? EntityUtils.toString(responseEntity) : null;
-      rt.setResponse(response);
-      rt.setResultBody(body);
-      rt.setStatusCode(code);
+      rt.setResultBody(EntityUtils.toString(rspEntity));
+    }
 
-      if (restOption.isDump()) {
-        log.info("响应体:{}", body);
+    if (ro.isDump()) {
+      log.info("响应体:{}", rt.getResultBody());
+    }
+
+    T t = (T) parseT(ro, rsp, rt);
+    OkBiz<T> okBiz = ro.getOkBiz();
+    if (!okBiz.isOk(rt.getStatusCode(), rt, t)) {
+      throw new HttpRestException(rt.getUrl(), rt.getStatusCode(), rsp, "业务判断不成功");
+    }
+
+    return t;
+  }
+
+  private void copyHeaders(RestOption ro, HttpRequestBase req) {
+    for (val headers : ro.getMoreHeaders().entrySet()) {
+      for (val value : headers.getValue()) {
+        req.addHeader(headers.getKey(), value);
       }
-
-      T t = (T) parseT(restOption, method, body, response, rt);
-      OkBiz<T> succ = restOption.getOkBiz();
-      if (succ != null && !succ.isOk(code, rt, t)) {
-        throw new HttpRestException(rt.getUrl(), code, response, succ + "业务判断不成功");
-      }
-
-      return t;
-    } catch (Exception ex) {
-      rt.setException(ex);
-      throw ex;
     }
   }
 
-  private String fixMethod(RestOption restOption) {
-    if (restOption.getMethod() != null) {
-      return restOption.getMethod();
+  private String fixMethod(RestOption ro) {
+    if (ro.getMethod() != null) {
+      return ro.getMethod();
     }
 
-    if (restOption.getRequestBody() != null || restOption.getUpload() != null) {
+    if (ro.getRequestBody() != null || ro.getUpload() != null) {
       return "POST";
     }
 
@@ -174,8 +162,8 @@ public class Rest {
   }
 
   @NotNull
-  private Map<String, String> copyHeaders(HttpResponse response) {
-    Header[] allHeaders = response.getAllHeaders();
+  private Map<String, String> copyHeaders(HttpResponse rsp) {
+    Header[] allHeaders = rsp.getAllHeaders();
     Map<String, String> headers = new HashMap<>(allHeaders.length);
 
     for (val header : allHeaders) {
@@ -184,53 +172,49 @@ public class Rest {
     return headers;
   }
 
-  private int codeCheck(RestOption restOption, HttpResponse response) {
-    int code = response.getStatusLine().getStatusCode();
-    OkStatus okStatus = restOption.getOkStatus();
+  private void codeCheck(RestOption ro, HttpResponse rsp, RestRuntime rt) {
+    int code = rsp.getStatusLine().getStatusCode();
+    rt.setStatusCode(code);
+    OkStatus okStatus = ro.getOkStatus();
     if (!okStatus.isOk(code)) {
-      throw new HttpRestException(restOption.getUrl(), code, response);
-    }
-
-    return code;
-  }
-
-  private void uploadBody(RestOption restOption, HttpRequestBase req) {
-    if (restOption.getUpload() != null) {
-      val builder = MultipartEntityBuilder.create();
-      builder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
-      String fn = restOption.getFileName();
-      builder.addBinaryBody(fn, restOption.getUpload(), ContentType.DEFAULT_BINARY, fn);
-      val entityReq = (HttpEntityEnclosingRequest) req;
-      entityReq.setEntity(builder.build());
+      throw new HttpRestException(ro.getUrl(), code, rsp);
     }
   }
 
-  private void jsonBody(RestOption restOption, HttpRequestBase req, RestRuntime rt) {
-    if (restOption.getRequestBody() != null && req instanceof HttpEntityEnclosingRequest) {
-      String payload = JSON.toJSONString(restOption.getRequestBody());
-      if (restOption.isDump()) {
+  private void jsonBody(RestOption ro, HttpRequestBase req, RestRuntime rt) {
+    Object body = ro.getRequestBody();
+    if (body != null && req instanceof HttpEntityEnclosingRequest) {
+      String payload = JSON.toJSONString(body);
+      if (ro.isDump()) {
         log.info("请求体:{}", payload);
       }
+
       rt.setPayload(payload);
-      val entityReq = (HttpEntityEnclosingRequest) req;
-      entityReq.setEntity(new StringEntity(payload, ContentType.APPLICATION_JSON));
+      val er = (HttpEntityEnclosingRequest) req;
+      er.setEntity(new StringEntity(payload, ContentType.APPLICATION_JSON));
+    } else if (ro.getUpload() != null) {
+      val builder = MultipartEntityBuilder.create();
+      builder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
+      String fn = ro.getFileName();
+      builder.addBinaryBody(fn, ro.getUpload(), ContentType.DEFAULT_BINARY, fn);
+      val er = (HttpEntityEnclosingRequest) req;
+      er.setEntity(builder.build());
     }
   }
 
-  private Object parseT(
-      RestOption restOption, String method, String body, HttpResponse response, RestRuntime rt) {
-    if ("HEAD".equals(method)) {
-      return copyHeaders(response);
+  private Object parseT(RestOption ro, HttpResponse rsp, RestRuntime rt) {
+    if ("HEAD".equals(rt.getMethod())) {
+      return copyHeaders(rsp);
     }
 
-    Type type = restOption.getType();
+    Type type = ro.getType();
     if (type != null) {
-      return JSON.parseObject(body, type);
+      return JSON.parseObject(rt.getResultBody(), type);
     }
 
-    Class<?> clazz = restOption.getClazz();
+    Class<?> clazz = ro.getClazz();
     if (clazz == HttpResponse.class) {
-      return response;
+      return rsp;
     }
 
     if (clazz == RestRuntime.class) {
@@ -238,10 +222,10 @@ public class Rest {
     }
 
     if (clazz != null) {
-      return JSON.parseObject(body, clazz);
+      return JSON.parseObject(rt.getResultBody(), clazz);
     }
 
-    return body;
+    return rt.getResultBody();
   }
 
   @EqualsAndHashCode(callSuper = true)
@@ -265,6 +249,43 @@ public class Rest {
     @Override
     public String toString() {
       return "url [" + uri + "] failed code:[" + code + "]";
+    }
+  }
+
+  private static final String REST_OPTION_KEY = "REST_OPTION_KEY";
+
+  /**
+   * httpclient请求响应拦截器.
+   *
+   * <p>参考https://www.tutorialspoint.com/apache_httpclient/apache_httpclient_interceptors.htm
+   */
+  static class Req implements HttpRequestInterceptor {
+    @Override
+    public void process(HttpRequest r, HttpContext ctx) {
+      RestOption ro = (RestOption) ctx.getAttribute(REST_OPTION_KEY);
+      if (!ro.isDump()) {
+        return;
+      }
+
+      log.info("请求啦 {}", r.getRequestLine());
+      for (Header h : r.getAllHeaders()) {
+        log.info("请求头 {}:{}", h.getName(), h.getValue());
+      }
+    }
+  }
+
+  static class Rsp implements HttpResponseInterceptor {
+    @Override
+    public void process(HttpResponse r, HttpContext ctx) {
+      RestOption ro = (RestOption) ctx.getAttribute(REST_OPTION_KEY);
+      if (!ro.isDump()) {
+        return;
+      }
+
+      log.info("响应啦 {}", r.getStatusLine());
+      for (Header h : r.getAllHeaders()) {
+        log.info("响应头 {}:{}", h.getName(), h.getValue());
+      }
     }
   }
 }

@@ -22,7 +22,7 @@ public class RestOption implements Cloneable {
   // 上传文件输入流
   @Getter InputStream upload;
   @Getter private OkStatus okStatus = new OkStatus() {};
-  @Getter private OkBiz okBiz;
+  @Getter private OkBiz okBiz = new OkBiz() {};
   @Getter private HttpHeaders moreHeaders = new HttpHeaders();
   @Getter private DoneBiz doneBiz = (success, rt) -> {};
   @Getter private boolean dump = true;

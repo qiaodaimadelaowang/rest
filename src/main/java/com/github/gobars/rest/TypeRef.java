@@ -14,25 +14,24 @@ public abstract class TypeRef<T> {
     Type t = findSubclass(getClass()).getGenericSuperclass();
     Assert.isInstanceOf(ParameterizedType.class, t, "Type must be a parameterized type");
 
-    Type[] actualTypeArguments = ((ParameterizedType) t).getActualTypeArguments();
-    Assert.isTrue(actualTypeArguments.length == 1, "Number of type arguments must be 1");
-    this.type = actualTypeArguments[0];
+    Type[] args = ((ParameterizedType) t).getActualTypeArguments();
+    Assert.isTrue(args.length == 1, "Number of type arguments must be 1");
+    type = args[0];
   }
 
   @Override
-  public boolean equals(@Nullable Object other) {
-    return (this == other
-        || (other instanceof TypeRef && this.type.equals(((TypeRef<?>) other).type)));
+  public boolean equals(@Nullable Object o) {
+    return (this == o || (o instanceof TypeRef && type.equals(((TypeRef<?>) o).type)));
   }
 
   @Override
   public int hashCode() {
-    return this.type.hashCode();
+    return type.hashCode();
   }
 
   @Override
   public String toString() {
-    return "TypeRef<" + this.type + ">";
+    return "TypeRef<" + type + ">";
   }
 
   private static Class<?> findSubclass(Class<?> child) {
@@ -41,10 +40,6 @@ public abstract class TypeRef<T> {
       throw new IllegalStateException("Expected PTypeRef superclass");
     }
 
-    if (TypeRef.class == parent) {
-      return child;
-    }
-
-    return findSubclass(parent);
+    return TypeRef.class == parent ? child : findSubclass(parent);
   }
 }

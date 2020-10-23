@@ -20,5 +20,7 @@ public interface OkBiz<T> {
    * @param resultBean 反序列化后的Bean
    * @return 是否成功
    */
-  boolean isOk(int stateCode, RestRuntime rt, T resultBean);
+  default boolean isOk(int stateCode, RestRuntime rt, T resultBean) {
+    return true;
+  }
 }
