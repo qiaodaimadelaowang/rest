@@ -9,65 +9,29 @@ import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Test;
 
-import java.io.*;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.util.Map;
 
 /** 使用海草命令，weed server，启动服务端，做测试服务器 */
 public class RestTest {
-  static Process goRestServerProcess;
-  static Process goWeedProcess;
+  static RestServer restServer = new RestServer("go-rest-server");
+  static RestServer weedServer = new RestServer("weed", "server");
 
   @BeforeClass
   @SneakyThrows
   public static void beforeClass() {
-    String binDir = "";
-    String os = System.getProperty("os.name", "generic").toLowerCase();
-    if (os.contains("mac") || os.contains("darwin")) {
-      binDir = "/mac-bin";
-      //    } else if (os.indexOf("win") >= 0) {
-      // ignore
-    } else if (os.contains("nux")) {
-      binDir = "/linux-bin";
-    }
-    if (binDir.isEmpty()) {
-      throw new RuntimeException("Unsupported os " + os);
-    }
-
-    val goRestServer =
-        new ProcessBuilder()
-            .command("src/test/resources" + binDir + "/go-rest-server")
-            .redirectErrorStream(true);
-    val goWeed =
-        new ProcessBuilder()
-            .command("src/test/resources" + binDir + "/weed", "server")
-            .redirectErrorStream(true);
-
-    goRestServerProcess = goRestServer.start();
-    goWeedProcess = goWeed.start();
-
-    new Thread(() -> printOut(goRestServerProcess)).start();
-    new Thread(() -> printOut(goWeedProcess)).start();
+    restServer.start();
+    weedServer.start();
 
     Thread.sleep(6000L);
   }
 
   @AfterClass
   public static void afterClass() {
-    goRestServerProcess.destroy();
-    goWeedProcess.destroy();
-  }
-
-  @SneakyThrows
-  public static void printOut(Process p) {
-    BufferedReader reader = new BufferedReader(new InputStreamReader(p.getInputStream()));
-
-    try {
-      String line;
-      while ((line = reader.readLine()) != null) {
-        System.out.println(line);
-      }
-    } catch (IOException ignore) {
-    }
+    restServer.stop();
+    weedServer.stop();
   }
 
   @Test
