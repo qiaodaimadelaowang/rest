@@ -12,7 +12,7 @@ import org.junit.Test;
 import java.io.File;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
-import java.util.Map;
+import java.util.*;
 
 /** 使用海草命令，weed server，启动服务端，做测试服务器 */
 public class RestTest {
@@ -73,10 +73,14 @@ public class RestTest {
     new File("temp/").mkdirs();
     @Cleanup val fo = new FileOutputStream("temp/" + assign.getFid() + ".png");
 
-    String downloadRest = rest.exec(new RestOption().url(url).download(fo));
+    RestOption o = new RestOption().url(url).download(fo).headers(new HashMap<String, List<String>>() {{
+      put("APPID", new ArrayList<String>(){{add("BINGOO");}});
+      put("TRACEID", new ArrayList<String>(){{add(UUID.randomUUID().toString());}});
+    }});
+    String downloadRest = rest.exec(o);
     System.out.println(downloadRest);
 
-    Map<String, String> headers = rest.exec(new RestOption().url(url).method("HEAD"));
+    Map<String, String> headers = rest.exec(o.method("HEAD"));
     System.out.println(headers);
 
     RestOption req = new RestOption().url("http://127.0.0.1:8812").req(assign);

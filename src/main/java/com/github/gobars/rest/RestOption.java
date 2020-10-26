@@ -2,6 +2,7 @@ package com.github.gobars.rest;
 
 import lombok.Getter;
 import lombok.SneakyThrows;
+import lombok.val;
 
 import java.io.InputStream;
 import java.io.OutputStream;
@@ -140,7 +141,7 @@ public class RestOption implements Cloneable {
       return copy;
     }
 
-    for (Map.Entry<String, List<String>> entry : moreHeaders.entrySet()) {
+    for (val entry : moreHeaders.entrySet()) {
       copy.moreHeaders
           .computeIfAbsent(entry.getKey(), k -> new LinkedList<>())
           .addAll(entry.getValue());
