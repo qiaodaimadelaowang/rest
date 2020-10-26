@@ -60,7 +60,8 @@ public class RestTest {
   public void upload() {
     Rest rest = new Rest();
     String assignUrl = "http://127.0.0.1:9333/dir/assign";
-    DirAssign assign = rest.exec(new RestOption().url(assignUrl).clazz(DirAssign.class).bizName("分配fid"));
+    DirAssign assign =
+        rest.exec(new RestOption().url(assignUrl).clazz(DirAssign.class).bizName("分配fid"));
     System.out.println(assign);
 
     @Cleanup val upload = new FileInputStream("src/test/resources/bikini.png");
@@ -89,6 +90,14 @@ public class RestTest {
     HttpResponse rsp =
         rest.exec(req.method("POST").url("http://127.0.0.1:8812/echo").clazz(HttpResponse.class));
     System.out.println(rsp);
+
+    HttpResponse getRsp =
+        rest.exec(
+            req.method("GET")
+                .url("http://127.0.0.1:8812/echo")
+                .req(assign)
+                .clazz(HttpResponse.class));
+    System.out.println(getRsp);
 
     RestRuntime result =
         rest.exec(req.method("POST").url("http://127.0.0.1:8812/echo").clazz(RestRuntime.class));

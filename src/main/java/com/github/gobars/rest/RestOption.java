@@ -135,15 +135,15 @@ public class RestOption implements Cloneable {
   public RestOption headers(Map<String, List<String>> moreHeaders) {
     RestOption copy = this.clone();
 
-    copy.moreHeaders = new LinkedHashMap<>();
-    if (moreHeaders == null) {
-      copy.moreHeaders.putAll(moreHeaders);
-    } else {
-      for (Map.Entry<String, List<String>> entry : moreHeaders.entrySet()) {
-        copy.moreHeaders
-            .computeIfAbsent(entry.getKey(), k -> new LinkedList<>())
-            .addAll(entry.getValue());
-      }
+    if (copy.moreHeaders == null) {
+      copy.moreHeaders = new LinkedHashMap<>(moreHeaders);
+      return copy;
+    }
+
+    for (Map.Entry<String, List<String>> entry : moreHeaders.entrySet()) {
+      copy.moreHeaders
+          .computeIfAbsent(entry.getKey(), k -> new LinkedList<>())
+          .addAll(entry.getValue());
     }
 
     return copy;

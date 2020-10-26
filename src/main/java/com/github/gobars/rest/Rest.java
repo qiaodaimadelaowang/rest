@@ -1,6 +1,7 @@
 package com.github.gobars.rest;
 
 import com.alibaba.fastjson.JSON;
+import com.alibaba.fastjson.TypeReference;
 import lombok.EqualsAndHashCode;
 import lombok.SneakyThrows;
 import lombok.Value;
@@ -10,6 +11,7 @@ import org.apache.http.*;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.*;
+import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.entity.mime.HttpMultipartMode;
@@ -60,21 +62,32 @@ public class Rest {
     }
   }
 
-  private HttpRequestBase buildRequest(String method, String url) {
-    switch (method.toUpperCase()) {
+  @SneakyThrows
+  private HttpRequestBase buildRequest(RestOption ro, RestRuntime rt) {
+    switch (rt.getMethod().toUpperCase()) {
       case "POST":
-        return new HttpPost(url);
+        return new HttpPost(rt.getUrl());
       case "DELETE":
-        return new HttpDelete(url);
+        return new HttpDelete(rt.getUrl());
       case "OPTIONS":
-        return new HttpOptions(url);
+        return new HttpOptions(rt.getUrl());
       case "PUT":
-        return new HttpPut(url);
+        return new HttpPut(rt.getUrl());
       case "HEAD":
-        return new HttpHead(url);
+        return new HttpHead(rt.getUrl());
       case "GET":
       default:
-        return new HttpGet(url);
+        if (ro.getRequestBody() != null) {
+          URIBuilder ub = new URIBuilder(rt.getUrl());
+          Map<String, Object> uriVariables = convertMap(ro.getRequestBody());
+          for (Map.Entry<String, Object> entry : uriVariables.entrySet()) {
+            ub.addParameter(entry.getKey(), entry.getValue().toString());
+          }
+
+          rt.setUrl(ub.toString());
+        }
+
+        return new HttpGet(rt.getUrl());
     }
   }
 
@@ -84,7 +97,7 @@ public class Rest {
     rt.setMethod(fixMethod(ro));
     rt.setUrl(ro.getUrl());
 
-    HttpRequestBase req = buildRequest(rt.getMethod(), rt.getUrl());
+    HttpRequestBase req = buildRequest(ro, rt);
     req.setConfig(requestConfig);
     jsonBody(ro, req, rt);
     copyHeaders(ro, req);
@@ -106,7 +119,7 @@ public class Rest {
           "业务名称:{} 请求方法:{} 请求地址:{} 响应码:{} 费时:{}毫秒",
           ro.getBizName(),
           rt.getMethod(),
-          ro.getUrl(),
+          rt.getUrl(),
           rsp.getStatusLine().getStatusCode(),
           rt.getHttpCostMillis());
     }
@@ -181,7 +194,12 @@ public class Rest {
     }
   }
 
+  @SneakyThrows
   private void jsonBody(RestOption ro, HttpRequestBase req, RestRuntime rt) {
+    if (rt.getMethod().equals("GET")) {
+      return;
+    }
+
     if (ro.getUpload() != null) {
       val builder = MultipartEntityBuilder.create();
       builder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
@@ -202,6 +220,15 @@ public class Rest {
       val er = (HttpEntityEnclosingRequest) req;
       er.setEntity(new StringEntity(payload, ContentType.APPLICATION_JSON));
     }
+  }
+
+  @SuppressWarnings("unchecked")
+  public static Map<String, Object> convertMap(Object body) {
+    if (body instanceof Map) {
+      return (Map<String, Object>) body;
+    }
+
+    return JSON.parseObject(JSON.toJSONString(body), new TypeReference<Map<String, Object>>() {});
   }
 
   private Object parseT(RestOption ro, HttpResponse rsp, RestRuntime rt) {
