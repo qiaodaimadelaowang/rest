@@ -136,14 +136,14 @@ public class RestOption implements Cloneable {
     RestOption copy = this.clone();
 
     copy.moreHeaders = new LinkedHashMap<>();
-    if (moreHeaders != null) {
+    if (moreHeaders == null) {
       copy.moreHeaders.putAll(moreHeaders);
-    }
-
-    for (Map.Entry<String, List<String>> entry : moreHeaders.entrySet()) {
-      String key = entry.getKey();
-      List<String> currentValues = copy.moreHeaders.computeIfAbsent(key, k -> new LinkedList<>());
-      currentValues.addAll(entry.getValue());
+    } else {
+      for (Map.Entry<String, List<String>> entry : moreHeaders.entrySet()) {
+        copy.moreHeaders
+            .computeIfAbsent(entry.getKey(), k -> new LinkedList<>())
+            .addAll(entry.getValue());
+      }
     }
 
     return copy;
