@@ -14,6 +14,7 @@ import java.util.Map;
 
 public class RestOption implements Cloneable {
   @Getter private String method;
+  @Getter private String bizName;
   @Getter private Type type;
   @Getter private Class clazz;
   @Getter private Object requestBody;
@@ -104,6 +105,12 @@ public class RestOption implements Cloneable {
   public RestOption okStatus(OkStatus okStatus) {
     RestOption copy = this.clone();
     copy.okStatus = okStatus;
+    return copy;
+  }
+
+  public RestOption bizName(String bizName) {
+    RestOption copy = this.clone();
+    copy.bizName = bizName;
     return copy;
   }
 

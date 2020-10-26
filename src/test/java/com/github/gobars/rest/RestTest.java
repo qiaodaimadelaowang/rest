@@ -60,7 +60,7 @@ public class RestTest {
   public void upload() {
     Rest rest = new Rest();
     String assignUrl = "http://127.0.0.1:9333/dir/assign";
-    DirAssign assign = rest.exec(new RestOption().url(assignUrl).clazz(DirAssign.class));
+    DirAssign assign = rest.exec(new RestOption().url(assignUrl).clazz(DirAssign.class).bizName("分配fid"));
     System.out.println(assign);
 
     @Cleanup val upload = new FileInputStream("src/test/resources/bikini.png");

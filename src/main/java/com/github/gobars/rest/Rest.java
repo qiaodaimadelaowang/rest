@@ -84,10 +84,6 @@ public class Rest {
     rt.setMethod(fixMethod(ro));
     rt.setUrl(ro.getUrl());
 
-    if (ro.isDump()) {
-      log.info("请求方法:{} 请求地址:{}", rt.getMethod(), rt.getUrl());
-    }
-
     HttpRequestBase req = buildRequest(rt.getMethod(), rt.getUrl());
     req.setConfig(requestConfig);
     jsonBody(ro, req, rt);
@@ -107,7 +103,8 @@ public class Rest {
 
     if (ro.isDump()) {
       log.info(
-          "请求方法:{} 请求地址:{} 响应码:{} 费时:{}毫秒",
+          "业务名称:{} 请求方法:{} 请求地址:{} 响应码:{} 费时:{}毫秒",
+          ro.getBizName(),
           rt.getMethod(),
           ro.getUrl(),
           rsp.getStatusLine().getStatusCode(),
