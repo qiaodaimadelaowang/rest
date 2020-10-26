@@ -53,7 +53,7 @@ public class Rest {
       return execInternal(restOption, rt);
     } catch (Exception ex) {
       rt.setException(ex);
-      log.warn("异常:{}", ex.getMessage());
+      log.error("请求地址:{} 费时:{}毫秒 异常:{}", rt.getUrl(), rt.getHttpCostMillis(), ex.getMessage());
       throw ex;
     } finally {
       restOption.getDoneBiz().done(rt.getException() == null, rt);
