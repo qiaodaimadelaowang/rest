@@ -1,30 +1,43 @@
 package com.github.gobars.rest;
 
+import cn.hutool.core.bean.BeanUtil;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.TypeReference;
+import java.lang.reflect.Type;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import lombok.EqualsAndHashCode;
 import lombok.SneakyThrows;
 import lombok.Value;
 import lombok.extern.slf4j.Slf4j;
 import lombok.val;
-import org.apache.http.*;
+import org.apache.http.Header;
+import org.apache.http.HttpEntity;
+import org.apache.http.HttpEntityEnclosingRequest;
+import org.apache.http.HttpRequest;
+import org.apache.http.HttpRequestInterceptor;
+import org.apache.http.HttpResponse;
+import org.apache.http.HttpResponseInterceptor;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.methods.*;
+import org.apache.http.client.methods.HttpDelete;
+import org.apache.http.client.methods.HttpGet;
+import org.apache.http.client.methods.HttpHead;
+import org.apache.http.client.methods.HttpOptions;
+import org.apache.http.client.methods.HttpPost;
+import org.apache.http.client.methods.HttpPut;
+import org.apache.http.client.methods.HttpRequestBase;
 import org.apache.http.client.utils.URIBuilder;
 import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.entity.mime.HttpMultipartMode;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.apache.http.entity.mime.content.StringBody;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.protocol.BasicHttpContext;
 import org.apache.http.protocol.HttpContext;
 import org.apache.http.util.EntityUtils;
-
-import java.lang.reflect.Type;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
 
 @Slf4j
 public class Rest {
@@ -33,7 +46,7 @@ public class Rest {
           .addInterceptorFirst(new Rsp())
           .addInterceptorFirst(new Req())
           .build();
-
+  private static final String REST_OPTION_KEY = "REST_OPTION_KEY";
   private final RequestConfig requestConfig =
       RequestConfig.custom()
           // 从连接池获取到连接的超时时间，如果是非连接池的话，该参数暂时没有发现有什么用处
@@ -45,6 +58,15 @@ public class Rest {
           // 建立连接的超时时间
           .setConnectTimeout(30 * 1000)
           .build();
+
+  @SuppressWarnings("unchecked")
+  public static Map<String, Object> convertMap(Object body) {
+    if (body instanceof Map) {
+      return (Map<String, Object>) body;
+    }
+
+    return JSON.parseObject(JSON.toJSONString(body), new TypeReference<Map<String, Object>>() {});
+  }
 
   public <T> T exec(RestOption restOption) {
     return exec(restOption, new RestRuntime());
@@ -201,12 +223,27 @@ public class Rest {
     }
 
     if (ro.getUpload() != null) {
-      val builder = MultipartEntityBuilder.create();
+      MultipartEntityBuilder builder = MultipartEntityBuilder.create();
       builder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
       String fn = ro.getFileName();
       builder.addBinaryBody(fn, ro.getUpload(), ContentType.DEFAULT_BINARY, fn);
-      val er = (HttpEntityEnclosingRequest) req;
-      er.setEntity(builder.build());
+        try {
+          final Map<String, Object> params = BeanUtil
+              .beanToMap(ro.getRequestBody(), Boolean.FALSE, Boolean.TRUE);
+          for (String key : params.keySet()) {
+            if (!(params.get(key) instanceof String)) {
+              continue;
+            }
+            final String value = (String) params.get(key);
+            StringBody stringBody =
+                new StringBody(value, ContentType.create("text/plain", "UTF-8"));
+            builder.addPart(key, stringBody);
+          }
+          HttpEntityEnclosingRequest er = (HttpEntityEnclosingRequest) req;
+          er.setEntity(builder.build());
+        } catch (Exception e) {
+          e.printStackTrace();
+        }
       return;
     }
 
@@ -217,18 +254,9 @@ public class Rest {
       }
 
       rt.setPayload(payload);
-      val er = (HttpEntityEnclosingRequest) req;
+      HttpEntityEnclosingRequest er = (HttpEntityEnclosingRequest) req;
       er.setEntity(new StringEntity(payload, ContentType.APPLICATION_JSON));
     }
-  }
-
-  @SuppressWarnings("unchecked")
-  public static Map<String, Object> convertMap(Object body) {
-    if (body instanceof Map) {
-      return (Map<String, Object>) body;
-    }
-
-    return JSON.parseObject(JSON.toJSONString(body), new TypeReference<Map<String, Object>>() {});
   }
 
   private Object parseT(RestOption ro, HttpResponse rsp, RestRuntime rt) {
@@ -280,8 +308,6 @@ public class Rest {
       return "url [" + uri + "] failed code:[" + code + "]";
     }
   }
-
-  private static final String REST_OPTION_KEY = "REST_OPTION_KEY";
 
   /**
    * httpclient请求响应拦截器.
