@@ -16,6 +16,7 @@ import org.apache.http.entity.ContentType;
 import org.apache.http.entity.StringEntity;
 import org.apache.http.entity.mime.HttpMultipartMode;
 import org.apache.http.entity.mime.MultipartEntityBuilder;
+import org.apache.http.entity.mime.content.StringBody;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.protocol.BasicHttpContext;
 import org.apache.http.protocol.HttpContext;
@@ -196,29 +197,41 @@ public class Rest {
 
   @SneakyThrows
   private void jsonBody(RestOption ro, HttpRequestBase req, RestRuntime rt) {
-    if (rt.getMethod().equals("GET")) {
+    if (rt.getMethod().equals("GET") || !(req instanceof HttpEntityEnclosingRequest)) {
       return;
     }
 
+    val er = (HttpEntityEnclosingRequest) req;
+
+    MultipartEntityBuilder builder = null;
     if (ro.getUpload() != null) {
-      val builder = MultipartEntityBuilder.create();
+      builder = MultipartEntityBuilder.create();
       builder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
       String fn = ro.getFileName();
       builder.addBinaryBody(fn, ro.getUpload(), ContentType.DEFAULT_BINARY, fn);
-      val er = (HttpEntityEnclosingRequest) req;
-      er.setEntity(builder.build());
-      return;
     }
 
-    if (ro.getRequestBody() != null && req instanceof HttpEntityEnclosingRequest) {
+    if (ro.getRequestBody() != null) {
       String payload = JSON.toJSONString(ro.getRequestBody());
       if (ro.isDump()) {
         log.info("请求体:{}", payload);
       }
 
       rt.setPayload(payload);
-      val er = (HttpEntityEnclosingRequest) req;
-      er.setEntity(new StringEntity(payload, ContentType.APPLICATION_JSON));
+      if (builder == null) {
+        er.setEntity(new StringEntity(payload, ContentType.APPLICATION_JSON));
+      } else {
+        for (val v : convertMap(ro.getRequestBody()).entrySet()) {
+          if (v.getValue() != null) {
+            val b = new StringBody(v.getValue().toString(), ContentType.APPLICATION_JSON);
+            builder.addPart(v.getKey(), b);
+          }
+        }
+      }
+    }
+
+    if (builder != null) {
+      er.setEntity(builder.build());
     }
   }
 

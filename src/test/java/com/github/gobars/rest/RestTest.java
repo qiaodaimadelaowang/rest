@@ -67,7 +67,11 @@ public class RestTest {
     @Cleanup val upload = new FileInputStream("src/test/resources/bikini.png");
     String url = "http://" + assign.getPublicUrl() + "/" + assign.getFid();
     UploadResult uploadResult =
-        rest.exec(new RestOption().url(url).upload("biniki.png", upload).clazz(UploadResult.class));
+        rest.exec(new RestOption().url(url).upload("biniki.png", upload)
+                .req(new HashMap<String, String>(){{
+                  put("key1", "value1");
+                  put("key2", "value2");
+                }}).clazz(UploadResult.class));
     System.out.println(uploadResult);
 
     new File("temp/").mkdirs();
