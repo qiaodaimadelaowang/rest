@@ -1,6 +1,5 @@
 package com.github.gobars.rest;
 
-import cn.hutool.core.bean.BeanUtil;
 import com.alibaba.fastjson.JSON;
 import com.alibaba.fastjson.TypeReference;
 import java.lang.reflect.Type;
@@ -227,23 +226,17 @@ public class Rest {
       builder.setMode(HttpMultipartMode.BROWSER_COMPATIBLE);
       String fn = ro.getFileName();
       builder.addBinaryBody(fn, ro.getUpload(), ContentType.DEFAULT_BINARY, fn);
-        try {
-          final Map<String, Object> params = BeanUtil
-              .beanToMap(ro.getRequestBody(), Boolean.FALSE, Boolean.TRUE);
-          for (String key : params.keySet()) {
-            if (!(params.get(key) instanceof String)) {
-              continue;
-            }
-            final String value = (String) params.get(key);
-            StringBody stringBody =
-                new StringBody(value, ContentType.create("text/plain", "UTF-8"));
-            builder.addPart(key, stringBody);
-          }
-          HttpEntityEnclosingRequest er = (HttpEntityEnclosingRequest) req;
-          er.setEntity(builder.build());
-        } catch (Exception e) {
-          e.printStackTrace();
+      Map<String, Object> params = convertMap(ro.getRequestBody());
+      for (String key : params.keySet()) {
+        if (!(params.get(key) instanceof String)) {
+          continue;
         }
+        final String value = (String) params.get(key);
+        StringBody stringBody = new StringBody(value, ContentType.create("text/plain", "UTF-8"));
+        builder.addPart(key, stringBody);
+      }
+      HttpEntityEnclosingRequest er = (HttpEntityEnclosingRequest) req;
+      er.setEntity(builder.build());
       return;
     }
 
